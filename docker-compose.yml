@@ -1,0 +1,14 @@
+services:
+  stitchcore:
+    image: stitchcore
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 8000:8000
+    volumes:
+      - stitchcore_cache:/data
+
+volumes:
+  stitchcore_cache:
+    driver: local
