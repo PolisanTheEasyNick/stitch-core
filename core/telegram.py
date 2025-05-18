@@ -8,7 +8,8 @@ import logging
 from random import choice
 
 from .config import TG_API_KEY, TG_API_HASH
-from .quote_manager import load_quotes
+from .quote_manager import get_random_quote
+from .emoji_manager import get_random_default_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class TelegramAPI:
     _telegram_lock = asyncio.Lock()
 
     current_status = None
+    current_emoji_status = None
 
     @classmethod
     async def connect(cls):
@@ -64,6 +66,9 @@ class TelegramAPI:
             await cls.connect()
         async with cls._telegram_lock:
             try:
+                if cls.current_emoji_status == emoji_id:
+                    return
+                cls.current_emoji_status = emoji_id
                 emoji_status = EmojiStatus(document_id=emoji_id)
                 await cls._client(UpdateEmojiStatusRequest(emoji_status))
                 logger.info(f"Updated emoji status to emoji_id: {emoji_id}")
@@ -74,5 +79,8 @@ class TelegramAPI:
 
     @classmethod
     async def set_default_status(cls):
-        quote = choice(load_quotes()).strip()
-        await cls.set_status_text(quote)
+        await cls.set_status_text(get_random_quote())
+
+    @classmethod
+    async def set_default_emoji(cls):
+        await cls.set_status_emoji(get_random_default_emoji())
