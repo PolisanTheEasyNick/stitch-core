@@ -1,8 +1,9 @@
 from typing import Optional
 import asyncio
 
-from .config import TG_IS_PREMIUM
+from .config import TG_IS_PREMIUM, PILED_DEFAULT_COLOR
 from .telegram import TelegramAPI
+from .piled import send_color_request
 
 #TODO: REWRITE AS CONFIGURATOR
 games_emoji_list = {
@@ -156,11 +157,22 @@ class MainProcessor:
             self.is_playing_osu = False
             await self.set_default_status()
             await self.set_current_emoji()
+            if PILED_DEFAULT_COLOR.startswith("#"):
+                PILED_DEFAULT_COLOR = PILED_DEFAULT_COLOR[1:]
+
+            r = int(PILED_DEFAULT_COLOR[0:2], 16)
+            g = int(PILED_DEFAULT_COLOR[2:4], 16)
+            b = int(PILED_DEFAULT_COLOR[4:6], 16)
+            send_color_request(r, g, b, 3, 50)
             return
         else:
             gameBio = f"🎮osu!: Chilling in main menu"
         await TelegramAPI.set_status_text(gameBio)
-        await TelegramAPI.set_status_emoji(5238084986841607939)
-        self.is_playing_osu = True
+        if not self.is_playing_osu:
+            await TelegramAPI.set_status_emoji(5238084986841607939)
+            self.is_playing_osu = True
+            #TODO use default color in configurator
+            send_color_request(255, 0, 110, 3, 50)
+
 
 main_processor = MainProcessor()

@@ -9,3 +9,5 @@ requests==2.32.3
 beautifulsoup4==4.13.4
 spotipy==2.25.1
 telethon==1.40.0
+httpx==0.28.1
+yt-finder==1.1.0
