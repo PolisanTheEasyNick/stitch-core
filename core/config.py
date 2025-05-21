@@ -3,6 +3,8 @@ import os
 
 load_dotenv("config.env")
 
+HOSTNAME = os.getenv("HOSTNAME", "*")
+
 DIGEST_BEARER = os.getenv("DIGEST_BEARER", "")
 IP_WHITELIST = os.getenv("IP_WHITELIST", "").split(",")
 

@@ -1,10 +1,12 @@
 import importlib
 import pkgutil
+
 from fastapi import FastAPI, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.base import APIModule
+from core.config import HOSTNAME
 
 def load_modules() -> list[APIModule]:
     modules = []
@@ -32,6 +34,13 @@ def create_app() -> FastAPI:
         module.register_events(app)
 
     app.include_router(main_router)
+
+    @app.get("/services/status")
+    async def get_services_status():
+        return [
+            {"name": "spotify", "last_update": "2025-05-18T12:34:56", "alive": True},
+            {"name": "weather", "last_update": "2025-05-18T12:30:00", "alive": False},
+        ]
 
     @app.get("/", response_class=HTMLResponse)
     async def list_routes():
@@ -66,9 +75,9 @@ def create_app() -> FastAPI:
         """
         return HTMLResponse(content=html_content)
 
-
     app.add_middleware(
         CORSMiddleware,
+        #allow_origins=[HOSTNAME],
         allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
