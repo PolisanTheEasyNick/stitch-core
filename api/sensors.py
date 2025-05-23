@@ -2,9 +2,8 @@ from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect, Request,
 import asyncio
 import json
 
-from .base import APIModule
+from .base import APIModule, get_real_ip
 from core.config import IP_WHITELIST
-
 
 latest_sensor_data = {
     "temperature": None,
@@ -32,7 +31,7 @@ class SensorsModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.post("/sensors")
         async def update_sensors(request: Request):
-            client_ip = request.client.host
+            client_ip = get_real_ip(request)
             if client_ip not in ALLOWED_IPS:
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 

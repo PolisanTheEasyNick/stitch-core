@@ -22,7 +22,7 @@ def get_random_quote():
         return TG_DEFAULT_STATUS
     return random.choice(quotes)
 
-def add_quote(quote: str):
+def append_quote(quote: str):
     quotes = load_quotes()
     quotes.append(quote)
     save_quotes(quotes)
@@ -31,4 +31,10 @@ def remove_quote(index: int):
     quotes = load_quotes()
     if 0 <= index < len(quotes):
         quotes.pop(index)
+        save_quotes(quotes)
+
+def update_quote(index: int, quote: str):
+    quotes = load_quotes()
+    if 0 <= index < len(quotes):
+        quotes[index] = quote
         save_quotes(quotes)

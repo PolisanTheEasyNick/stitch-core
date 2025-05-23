@@ -1,8 +1,8 @@
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, HTTPException
 
-from .base import APIModule
+from .base import APIModule, get_real_ip
 from core.piled import get_current_color, send_color_request
 from core.config import IP_WHITELIST
 
@@ -20,7 +20,7 @@ class PiLEDModule(APIModule):
             green: Optional[int] = Query(None, ge=0, le=255),
             blue: Optional[int] = Query(None, ge=0, le=255)
         ):
-            client_ip = request.client.host
+            client_ip = get_real_ip(request)
             if client_ip not in IP_WHITELIST:
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 

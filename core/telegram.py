@@ -9,7 +9,7 @@ from random import choice
 
 from .config import TG_API_KEY, TG_API_HASH
 from .quote_manager import get_random_quote
-from .emoji_manager import get_random_default_emoji
+from .emoji_manager import get_random_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -83,4 +83,4 @@ class TelegramAPI:
 
     @classmethod
     async def set_default_emoji(cls):
-        await cls.set_status_emoji(get_random_default_emoji())
+        await cls.set_status_emoji(get_random_emoji())

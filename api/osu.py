@@ -2,9 +2,9 @@ from fastapi import APIRouter, FastAPI, WebSocket, WebSocketDisconnect, Request,
 import asyncio
 import json
 
-from .base import APIModule
+from .base import APIModule, get_real_ip
 from core.config import IP_WHITELIST
-
+from core.main_processor import main_processor
 
 latest_osu_data = {
     "artist": None,
@@ -33,7 +33,7 @@ class OsuModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.post("/osu")
         async def update_osu(request: Request):
-            client_ip = request.client.host
+            client_ip = get_real_ip(request)
             if client_ip not in ALLOWED_IPS:
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 
@@ -48,6 +48,7 @@ class OsuModule(APIModule):
 
             if updated:
                 await notify_clients(latest_osu_data)
+                await main_processor.handle_osu_update(latest_osu_data)
 
             return {"status": "ok"}
 

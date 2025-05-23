@@ -61,7 +61,6 @@ games_emoji_list = {
     "": ("default game icon", 5244764300937011946)
 }
 
-
 def get_game(key):
     key = key.strip()
     for game_id, game_info in games_emoji_list.items():
@@ -147,6 +146,7 @@ class MainProcessor:
         BPM = osu_data["BPM"]
         SR = osu_data["SR"]
         STATUS = osu_data["status"]
+        print(f"Received osu update: {artist} - {title}, BPM: {BPM}, SR: {SR}, Status: {STATUS}")
         if STATUS == 2:
             gameBio = f"🎮osu!: {artist} - {title} | 🥁: {BPM} | {SR}*"
         elif STATUS == 11:
@@ -157,12 +157,14 @@ class MainProcessor:
             self.is_playing_osu = False
             await self.set_default_status()
             await self.set_current_emoji()
-            if PILED_DEFAULT_COLOR.startswith("#"):
-                PILED_DEFAULT_COLOR = PILED_DEFAULT_COLOR[1:]
 
-            r = int(PILED_DEFAULT_COLOR[0:2], 16)
-            g = int(PILED_DEFAULT_COLOR[2:4], 16)
-            b = int(PILED_DEFAULT_COLOR[4:6], 16)
+            color = PILED_DEFAULT_COLOR
+            if color.startswith("#"):
+                color = color[1:]
+
+            r = int(color[0:2], 16)
+            g = int(color[2:4], 16)
+            b = int(color[4:6], 16)
             send_color_request(r, g, b, 3, 50)
             return
         else:
