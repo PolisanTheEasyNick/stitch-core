@@ -5,6 +5,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+
 from api.base import APIModule
 from core.config import HOSTNAME
 

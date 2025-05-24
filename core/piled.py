@@ -74,3 +74,13 @@ def get_current_color():
     except Exception as e:
         print(f"An error occurred: {e}")
         return {"status": "error", "reason": str(e)}
+
+def set_default_color():
+    color = PILED_DEFAULT_COLOR
+    if color.startswith("#"):
+        color = color[1:]
+
+    r = int(color[0:2], 16)
+    g = int(color[2:4], 16)
+    b = int(color[4:6], 16)
+    send_color_request(r, g, b, 3, 50)

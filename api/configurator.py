@@ -12,8 +12,12 @@ from core.emoji_manager import (
     append_emoji, update_emoji, remove_emoji,
     parse_emoji_kind
 )
-from api.base import APIModule
+from core.game_manager import (
+    load_games, save_games,
+    append_game, update_game, remove_game
+)
 from core.config import IP_WHITELIST
+from .base import APIModule, get_real_ip
 
 class QuotesPayload(BaseModel):
     quotes: List[str]
@@ -31,6 +35,19 @@ class EmojisPayload(BaseModel):
 
 class EmojiAddPayload(BaseModel):
     value: str
+
+class GameItem(BaseModel):
+    steam_id: str
+    name: str
+    emoji_id: str
+    color: str
+
+class GamesPayload(BaseModel):
+    games: List[GameItem]
+
+class GameEditPayload(BaseModel):
+    index: int
+    game: GameItem
 
 
 def validate(request):
@@ -111,6 +128,38 @@ class ConfigAPI(APIModule):
             kind = parse_emoji_kind(type)
             remove_emoji(index, kind)
             return {"success": True}
+
+
+        # GAMES
+        @router.get("/config/games", response_model=List[GameItem])
+        async def get_games(request: Request):
+            validate(request)
+            return load_games()
+
+        @router.post("/config/games")
+        async def set_games(request: Request, payload: GamesPayload):
+            validate(request)
+            save_games([game.dict() for game in payload.games])
+            return {"success": True, "count": len(payload.games)}
+
+        @router.patch("/config/games/add")
+        async def add_game(request: Request, payload: GameItem):
+            validate(request)
+            append_game(payload.dict())
+            return {"success": True}
+
+        @router.patch("/config/games/edit")
+        async def edit_game(request: Request, payload: GameEditPayload):
+            validate(request)
+            update_game(payload.index, payload.game.dict())
+            return {"success": True}
+
+        @router.delete("/config/games/{index}")
+        async def delete_game(request: Request, index: int):
+            validate(request)
+            remove_game(index)
+            return {"success": True}
+
 
     def register_websockets(self, router: APIRouter) -> None:
         pass
