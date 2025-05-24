@@ -9,6 +9,9 @@ import websockets
 
 from .base import APIModule
 from core.config import ACCUWEATHER_API_KEY, ACCUWEATHER_LOCATION_CODE, WEATHER_API_KEY, WEATHER_COORDS
+from core.logger import get_logger
+
+logger = get_logger("Weather")
 
 url = f'http://dataservice.accuweather.com/currentconditions/v1/{ACCUWEATHER_LOCATION_CODE}?apikey={ACCUWEATHER_API_KEY}&details=true'
 
@@ -16,6 +19,7 @@ connected_clients = set()
 last_weather = {}
 
 async def send_update(data):
+    logger.debug("Sending update to WS subscribers")
     global connected_clients
     disconnected = set()
     message = json.dumps(data)
@@ -63,16 +67,17 @@ async def weather_update():
           else:
             isDay = False
 
-          print(f"Current temp: {temp}")
-          print(f"Real temp: {real_temp}")
-          print(f"Weather text: {weather_text}")
-          print(f"Weather icon id: {weather_icon}")
-          print(f"Sunrise time: {sunrise}")
-          print(f"UV Index: {uv_index}")
-          print(f"Is day in Ukraine: {isDay}")
-          print(f"Update time: {datetime.datetime.now(kiev_tz).strftime('%Y-%m-%d %H:%M:%S')}")
+          logger.info(f"""Updated weather:
+          Current temp: {temp}
+          Real temp: {real_temp}
+          Weather text: {weather_text}
+          Weather icon id: {weather_icon}
+          Sunrise time: {sunrise}
+          UV Index: {uv_index}
+          Is day in Ukraine: {isDay}
+          Update time: {datetime.datetime.now(kiev_tz).strftime('%Y-%m-%d %H:%M:%S')}
+          """)
 
-          # Create a dictionary with the weather data
           weather_dict = {
             'temperature_celsius': temp,
             'real_temp_celsius': real_temp,
@@ -83,12 +88,9 @@ async def weather_update():
             'last_update_time': datetime.datetime.now(kiev_tz).strftime('%Y-%m-%d %H:%M:%S'),
           }
 
-          # Write the weather data as JSON to a file named "weather_data.json"
-          #with open('weather_data.json', 'w') as f:
-          #        json.dump(weather_dict, f)
           await send_update(weather_dict)
           last_weather = weather_dict
-          await asyncio.sleep(1800) #sleep 30 mins #1800 was
+          await asyncio.sleep(1800)
 
 
 class WeatherModule(APIModule):
@@ -96,11 +98,13 @@ class WeatherModule(APIModule):
 
         @router.get("/weather")
         def get_weather():
+            logger.debug("GET on /weather")
             return last_weather
 
     def register_websockets(self, app: FastAPI):
         @app.websocket("/weather")
         async def websocket_endpoint(websocket: WebSocket):
+            logger.debug("GET on ws /weather")
             await websocket.accept()
             connected_clients.add(websocket)
             try:

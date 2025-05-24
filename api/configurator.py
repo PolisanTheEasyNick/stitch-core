@@ -18,6 +18,9 @@ from core.game_manager import (
 )
 from core.config import IP_WHITELIST
 from .base import APIModule, get_real_ip
+from core.logger import get_logger
+
+logger = get_logger("Configurator")
 
 class QuotesPayload(BaseModel):
     quotes: List[str]
@@ -51,6 +54,7 @@ class GameEditPayload(BaseModel):
 
 
 def validate(request):
+    logger.debug(f"Validating {request}")
     client_ip = get_real_ip(request)
     if client_ip not in IP_WHITELIST:
         raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
@@ -62,11 +66,13 @@ class ConfigAPI(APIModule):
 
         @router.get("/config/quotes", response_model=List[str])
         async def get_quotes(request: Request):
+            logger.debug("GET on /config/quotes")
             validate(request)
             return load_quotes()
 
         @router.post("/config/quotes")
         async def set_quotes(request: Request, payload: QuotesPayload):
+            logger.debug("POST on /config/quotes")
             validate(request)
             if not all(isinstance(q, str) and q.strip() for q in payload.quotes):
                 raise HTTPException(400, detail="Quotes must be non-empty strings.")
@@ -75,18 +81,21 @@ class ConfigAPI(APIModule):
 
         @router.patch("/config/quotes/add")
         async def add_quote(request: Request, payload: EmojiAddPayload):
+            logger.debug("PATCH on /config/quotes/add")
             validate(request)
             append_quote(payload.value)
             return {"success": True}
 
         @router.patch("/config/quotes/edit")
         async def edit_quote(request: Request, payload: QuoteEditPayload):
+            logger.debug("PATCH on /config/quotes/edit")
             validate(request)
             update_quote(payload.index, payload.value)
             return {"success": True}
 
         @router.delete("/config/quotes/{index}")
         async def delete_quote(request: Request, index: int):
+            logger.debug(f"DELETE on /config/quotes/{index}")
             validate(request)
             remove_quote(index)
             return {"success": True}
@@ -95,12 +104,14 @@ class ConfigAPI(APIModule):
 
         @router.get("/config/emoji", response_model=List[str])
         async def get_emojis(request: Request, type: Optional[str] = Query("default")):
+            logger.debug("GET on /config/emoji")
             validate(request)
             kind = parse_emoji_kind(type)
             return load_emojis(kind)
 
         @router.post("/config/emoji")
         async def set_emojis(request: Request, payload: EmojisPayload, type: Optional[str] = Query("default")):
+            logger.debug("POST on /config/emoji")
             validate(request)
             kind = parse_emoji_kind(type)
             if not all(isinstance(e, str) and e.strip() for e in payload.emojis):
@@ -110,6 +121,7 @@ class ConfigAPI(APIModule):
 
         @router.patch("/config/emoji/add")
         async def add_emoji(request: Request, payload: EmojiAddPayload, type: Optional[str] = Query("default")):
+            logger.debug("PATCH on /config/emoji/add")
             validate(request)
             kind = parse_emoji_kind(type)
             append_emoji(payload.value, kind)
@@ -117,6 +129,7 @@ class ConfigAPI(APIModule):
 
         @router.patch("/config/emoji/edit")
         async def edit_emoji(request: Request, payload: EmojiEditPayload, type: Optional[str] = Query("default")):
+            logger.debug("PATCH on /config/edit")
             validate(request)
             kind = parse_emoji_kind(type)
             update_emoji(payload.index, payload.value, kind)
@@ -124,6 +137,7 @@ class ConfigAPI(APIModule):
 
         @router.delete("/config/emoji/{index}")
         async def delete_emoji(request: Request, index: int, type: Optional[str] = Query("default")):
+            logger.debug(f"DELETE on /config/emoji/{index}")
             validate(request)
             kind = parse_emoji_kind(type)
             remove_emoji(index, kind)
@@ -133,29 +147,34 @@ class ConfigAPI(APIModule):
         # GAMES
         @router.get("/config/games", response_model=List[GameItem])
         async def get_games(request: Request):
+            logger.debug("GET on /config/games")
             validate(request)
             return load_games()
 
         @router.post("/config/games")
         async def set_games(request: Request, payload: GamesPayload):
+            logger.debug("POST on /config/games")
             validate(request)
             save_games([game.dict() for game in payload.games])
             return {"success": True, "count": len(payload.games)}
 
         @router.patch("/config/games/add")
         async def add_game(request: Request, payload: GameItem):
+            logger.debug("PATCH on /config/games/add")
             validate(request)
             append_game(payload.dict())
             return {"success": True}
 
         @router.patch("/config/games/edit")
         async def edit_game(request: Request, payload: GameEditPayload):
+            logger.debug("PATCH on /config/games/edit")
             validate(request)
             update_game(payload.index, payload.game.dict())
             return {"success": True}
 
         @router.delete("/config/games/{index}")
         async def delete_game(request: Request, index: int):
+            logger.debug("DELETE on /config/games/{index}")
             validate(request)
             remove_game(index)
             return {"success": True}

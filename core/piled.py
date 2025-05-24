@@ -6,6 +6,9 @@ from time import time
 import struct
 
 from core.config import PILED_SHARED_SECRET, PILED_ADDRESS, PILED_DEFAULT_COLOR
+from .logger import get_logger
+
+logger = get_logger("PiLED-back")
 
 def hmac_sha256(secret, data):
     secret_key = bytes(secret, "utf-8")
@@ -17,12 +20,13 @@ def send_tcp_packet(host, port, data):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect((host, port))
             sock.sendall(data)
-            print(f"Data sent to {host}:{port}")
+            logger.debug(f"Data sent to {host}:{port}")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.debug(f"An error occurred: {e}")
 
 
-def send_color_request(red, green, blue, duration, steps):
+def send_color_request(red, green, blue, duration = 3, steps = 150):
+    logger.debug(f"Send color request called with: {red}, {green}, {blue}")
     current_timestamp = int(time())
     nonce = random.getrandbits(64)
     timestamp_bytes = struct.pack(">Q", current_timestamp)
@@ -38,6 +42,7 @@ def send_color_request(red, green, blue, duration, steps):
     send_tcp_packet(PILED_ADDRESS, 3384, tcp_package)
 
 def get_current_color():
+    logger.debug("Get current color called")
     current_timestamp = int(time())
     nonce = random.getrandbits(64)
     timestamp_bytes = struct.pack(">Q", current_timestamp)
@@ -50,9 +55,9 @@ def get_current_color():
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect((PILED_ADDRESS, 3384))
             sock.sendall(HEADER)
-            print(f"Data sent to {PILED_ADDRESS}:3384")
+            logger.debug(f"Data sent to {PILED_ADDRESS}:3384")
             response = sock.recv(1024)
-            print(f"Received response: {response.hex()}")
+            logger.debug(f"Received response: {response.hex()}")
 
             if len(response) >= 0x35:
                 red = response[0x32]
@@ -72,10 +77,11 @@ def get_current_color():
                 return {"status": "error", "reason": "Incomplete response"}
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logger.error(f"An error occurred: {e}")
         return {"status": "error", "reason": str(e)}
 
 def set_default_color():
+    logger.debug("Set default color called")
     color = PILED_DEFAULT_COLOR
     if color.startswith("#"):
         color = color[1:]

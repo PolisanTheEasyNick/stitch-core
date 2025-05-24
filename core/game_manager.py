@@ -2,6 +2,8 @@ import json
 import os
 from typing import List
 
+from .config import TG_DEFAULT_GAME_EMOJI, PILED_DEFAULT_COLOR
+
 GAMES_PATH = "/data/games.json"
 
 def ensure_data_file():
@@ -40,7 +42,17 @@ def remove_game(index: int) -> None:
 
 def find_game_by_query(query: str) -> dict | None:
     games = load_games()
+
     for game in games:
         if game.get("steam_id") == query or game.get("name") == query:
             return game
-    return None
+
+    for game in games:
+        if game.get("name") == "default game icon":
+            return game
+
+    return {
+        "game": "Default",
+        "color": PILED_DEFAULT_COLOR,
+        "emoji": TG_DEFAULT_GAME_EMOJI
+    }

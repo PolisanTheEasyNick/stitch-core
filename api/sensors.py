@@ -4,6 +4,9 @@ import json
 
 from .base import APIModule, get_real_ip
 from core.config import IP_WHITELIST
+from core.logger import get_logger
+
+logger = get_logger("Sensors")
 
 latest_sensor_data = {
     "temperature": None,
@@ -17,6 +20,7 @@ connected_clients = set()
 ALLOWED_IPS = IP_WHITELIST
 
 async def notify_clients(data):
+    logger.debug("Notifying WS clients about update")
     global connected_clients
     alive = set()
     for ws in connected_clients:
@@ -31,8 +35,10 @@ class SensorsModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.post("/sensors")
         async def update_sensors(request: Request):
+            logger.debug("POST on /sensors")
             client_ip = get_real_ip(request)
             if client_ip not in ALLOWED_IPS:
+                logger.warning(f"POST on /sensors from non-whitelisted IP: {client_ip}")
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 
             global latest_sensor_data
@@ -51,6 +57,7 @@ class SensorsModule(APIModule):
 
         @router.get("/sensors")
         async def get_sensors():
+            logger.debug("GET on /sensors")
             return latest_sensor_data
 
     def register_websockets(self, app: FastAPI):

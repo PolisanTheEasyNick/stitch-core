@@ -5,11 +5,15 @@ from fastapi import APIRouter, Query, Request, HTTPException
 from .base import APIModule, get_real_ip
 from core.piled import get_current_color, send_color_request
 from core.config import IP_WHITELIST
+from core.logger import get_logger
+
+logger = get_logger("PiLED")
 
 class PiLEDModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.get("/piled")
         async def get_color():
+            logger.debug("GET on /piled")
             return get_current_color()
 
         @router.post("/piled")
@@ -20,8 +24,10 @@ class PiLEDModule(APIModule):
             green: Optional[int] = Query(None, ge=0, le=255),
             blue: Optional[int] = Query(None, ge=0, le=255)
         ):
+            logger.debug("POST on /piled")
             client_ip = get_real_ip(request)
             if client_ip not in IP_WHITELIST:
+                logger.warning(f"POST on /piled from non-whitelisted IP: {client_ip}")
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 
             try:

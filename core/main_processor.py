@@ -5,7 +5,9 @@ from .config import TG_IS_PREMIUM, PILED_DEFAULT_COLOR
 from .telegram import TelegramAPI
 from .piled import send_color_request, set_default_color
 from .game_manager import find_game_by_query
+from .logger import get_logger
 
+logger = get_logger("MainProcessor")
 
 class MainProcessor:
     def __init__(self):
@@ -17,11 +19,14 @@ class MainProcessor:
     async def set_default_status(self):
         #from any game state to default
         if self.current_spotify_song:
+            logger.debug("Setting Spotify song status")
             await TelegramAPI.set_status_text(self.current_spotify_song)
         else:
+            logger.debug("Setting default TG status")
             await TelegramAPI.set_default_status()
 
     async def set_current_emoji(self):
+        logger.debug("Setting current emoji")
         #may be some game, or activity, or low battery, or just random from defaults
         if self.is_playing_game or self.is_playing_osu:
             return #steam or osu processors should've set own emoji
@@ -30,8 +35,9 @@ class MainProcessor:
 
     async def handle_spotify_update(self, song: str, artist: str, is_playing: bool, is_local: bool, is_stopped: bool = False):
         """Called by the Spotify API module on new song/event."""
+        logger.debug("New spotify update")
         if self.is_playing_game or self.is_playing_osu:
-            #print("Skipping Spotify status update because a game is running")
+            logger.debug("Skipping Spotify status update because a game is running")
             return
 
         if is_stopped:
@@ -59,11 +65,13 @@ class MainProcessor:
             status = f"{prefix} {trimmed_song}{suffix}"
 
         self.current_spotify_song = status
+        logger.debug(f"Sending status to TG: {status}")
         await TelegramAPI.set_status_text(status)
 
 
     async def handle_steam_update(self, game_name: str, is_playing_game: bool):
         """Called by the Steam API module."""
+        logger.debug(f"Steam update called")
         self.is_playing_game = is_playing_game
 
         if self.is_playing_osu:
@@ -74,12 +82,12 @@ class MainProcessor:
 
             game = find_game_by_query(game_name)
             emoji_id = game["emoji_id"] if game else find_game_by_query("default game icon")["emoji_id"]
-
+            logger.debug(f"Emoji_id: {emoji_id}")
             await TelegramAPI.set_status_emoji(emoji_id)
             color = game["color"]
             if color.startswith("#"):
                 color = color[1:]
-
+            logger.debug(f"Game: {game}, emoji: {emoji_id}, color: {color}")
             r = int(color[0:2], 16)
             g = int(color[2:4], 16)
             b = int(color[4:6], 16)
@@ -95,7 +103,7 @@ class MainProcessor:
         BPM = osu_data["BPM"]
         SR = osu_data["SR"]
         STATUS = osu_data["status"]
-        print(f"Received osu update: {artist} - {title}, BPM: {BPM}, SR: {SR}, Status: {STATUS}")
+        logger.debug(f"Received osu update: {artist} - {title}, BPM: {BPM}, SR: {SR}, Status: {STATUS}")
         if STATUS == 2:
             gameBio = f"🎮osu!: {artist} - {title} | 🥁: {BPM} | {SR}*"
         elif STATUS == 11:

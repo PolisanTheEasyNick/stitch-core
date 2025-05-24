@@ -5,6 +5,9 @@ from spotipy.oauth2 import SpotifyOAuth
 
 from .base import APIModule
 from core.main_processor import main_processor
+from core.logger import get_logger
+
+logger = get_logger("Spotify")
 
 last_spotify = {
     "artist": None,
@@ -28,6 +31,7 @@ async def spotify_update():
         try:
             data = get_info()
         except Exception as e:
+            logger.warning(f"Error while getting info: {e}")
             last_spotify = {
                 "artist": None,
                 "song": None,
@@ -43,6 +47,7 @@ async def spotify_update():
                 "song": None,
                 "state": "stopped",
             }
+            logger.debug(f"No data")
             await main_processor.handle_spotify_update("", "", False, False, True)
             await broadcast_update()
             await asyncio.sleep(10)
@@ -54,12 +59,14 @@ async def spotify_update():
         artist = ", ".join(a["name"] for a in data["item"]["artists"])
 
         if song != old_song or artist != old_artist or last_spotify.get("state") != ("playing" if is_playing else "paused"):
+
             last_spotify = {
                 "artist": artist,
                 "song": song,
                 "state": "playing" if is_playing else "paused",
                 "isLocal": is_local
             }
+            logger.debug(f"New data: {last_spotify}")
             old_artist, old_song = artist, song
             await main_processor.handle_spotify_update(song, artist, is_playing, is_local)
             await broadcast_update()
@@ -80,11 +87,13 @@ class SpotifyModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.get("/spotify")
         def get_spotify():
+            logger.debug(f"GET on /spotify")
             return last_spotify
 
     def register_websockets(self, app: FastAPI):
         @app.websocket("/spotify")
         async def websocket_endpoint(websocket: WebSocket):
+            logger.debug(f"GET on ws /spotify")
             await websocket.accept()
             connected_clients.add(websocket)
             try:

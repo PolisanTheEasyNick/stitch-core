@@ -5,6 +5,9 @@ import json
 from .base import APIModule, get_real_ip
 from core.config import IP_WHITELIST
 from core.main_processor import main_processor
+from core.logger import get_logger
+
+logger = get_logger("OSU")
 
 latest_osu_data = {
     "artist": None,
@@ -19,6 +22,7 @@ connected_clients = set()
 ALLOWED_IPS = IP_WHITELIST
 
 async def notify_clients(data):
+    logger.debug("Notifying WS clients about change")
     global connected_clients
     alive = set()
     for ws in connected_clients:
@@ -33,6 +37,7 @@ class OsuModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.post("/osu")
         async def update_osu(request: Request):
+            logger.debug("POST on /osu")
             client_ip = get_real_ip(request)
             if client_ip not in ALLOWED_IPS:
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
@@ -47,6 +52,7 @@ class OsuModule(APIModule):
                     updated = True
 
             if updated:
+                logger.info("New change, notifying clients")
                 await notify_clients(latest_osu_data)
                 await main_processor.handle_osu_update(latest_osu_data)
 
@@ -54,6 +60,7 @@ class OsuModule(APIModule):
 
         @router.get("/osu")
         async def get_osu():
+            logger.debug("GET on /osu")
             return latest_osu_data
 
     def register_websockets(self, app: FastAPI):

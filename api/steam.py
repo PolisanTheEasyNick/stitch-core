@@ -11,6 +11,9 @@ from bs4 import BeautifulSoup
 from .base import APIModule
 from core.config import STEAM_PROFILE_LINK, STEAM_API, STEAM_USER
 from core.main_processor import main_processor
+from core.logger import get_logger
+
+logger = get_logger("Steam")
 
 connected_clients = set()
 status = {}
@@ -38,11 +41,14 @@ def steam_info():
   if element:
     text = element.get_text()
   if text == "Currently Offline":
+    logger.debug("User offline")
     return {"status": "offline"}
   elif text == "Currently Online":
+    logger.debug("User online")
     return {"status": "online"}
   elif text == "Currently In-Game":
     game_name = soup.find(class_="profile_in_game_name").get_text().strip()
+    logger.debug(f"User playing {game_name}")
     return {"status": "playing", "game_name": game_name}
   else:
     return {"status": "error"}
@@ -68,11 +74,13 @@ class SteamModule(APIModule):
 
         @router.get("/steam")
         def get_steam():
+            logger.debug(f"GET on /steam")
             return status
 
     def register_websockets(self, app: FastAPI):
         @app.websocket("/steam")
         async def websocket_endpoint(websocket: WebSocket):
+            logger.debug(f"GET on ws /steam")
             await websocket.accept()
             connected_clients.add(websocket)
 
