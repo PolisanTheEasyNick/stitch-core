@@ -6,6 +6,7 @@ from typing import Annotated
 from core.config import DIGEST_BEARER
 from .base import APIModule
 from core.logger import get_logger
+from core.main_processor import main_processor
 
 activity_data = {
     "phone_battery": None,
@@ -50,6 +51,7 @@ class ActivityModule(APIModule):
                     updated = True
             if updated:
                 await notify_clients(activity_data)
+                await main_processor.handle_activity_update(activity_data)
             return {"status": "ok"}
 
         @router.get("/activity")

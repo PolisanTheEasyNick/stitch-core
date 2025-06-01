@@ -7,11 +7,14 @@ from telethon.tl.types import EmojiStatus
 import asyncio
 import logging
 from random import choice
+import httpx
+from typing import Optional
 
 from .config import TG_API_KEY, TG_API_HASH
 from .quote_manager import get_random_quote
 from .emoji_manager import get_random_emoji
 from .logger import get_logger
+from .enums import ActivityType
 
 logger = get_logger("Telegram")
 
@@ -114,3 +117,23 @@ class TelegramAPI:
     @classmethod
     async def set_default_emoji(cls):
         await cls.set_status_emoji(get_random_emoji())
+
+    @classmethod
+    async def send_message(cls, chat_id: int | str, message: str):
+        if not cls._enabled:
+            logger.error("Telegram is disabled due to missing session.")
+            return
+        if cls._client is None:
+            await cls.connect()
+        if not cls._enabled:
+            return
+
+        async with cls._telegram_lock:
+            try:
+                await cls._client.send_message(chat_id, message)
+                logger.info(f"Sent message to {chat_id}: {message}")
+            except FloodWaitError as e:
+                logger.warning(f"Flood wait: wait {e.seconds} seconds before retrying.")
+            except RPCError as e:
+                logger.error(f"Telegram RPC error while sending message: {e}")
+
