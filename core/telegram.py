@@ -14,7 +14,6 @@ from .config import TG_API_KEY, TG_API_HASH
 from .quote_manager import get_random_quote
 from .emoji_manager import get_random_emoji
 from .logger import get_logger
-from .enums import ActivityType
 
 logger = get_logger("Telegram")
 
@@ -57,6 +56,7 @@ class TelegramAPI:
 
     @classmethod
     async def set_status_text(cls, status: str):
+        logger.debug(f"Trying to set status text: {status}")
         if not cls._enabled:
             logger.debug("Telegram is disabled due to missing session.")
             return
@@ -82,6 +82,7 @@ class TelegramAPI:
 
     @classmethod
     async def set_status_emoji(cls, emoji_id: int):
+        logger.debug(f"Trying to set status emoji: {emoji_id}")
         if not cls._enabled:
             logger.debug("Telegram is disabled due to missing session.")
             return

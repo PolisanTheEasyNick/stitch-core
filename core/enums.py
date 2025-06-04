@@ -1,6 +1,7 @@
 from enum import Enum
 
-class ActivityType(str, Enum):
-    WALKING = "walk"
-    SLEEPING = "sleep"
-    CYCLING = "cycle"
+class EmojiKind(Enum):
+    DEFAULT = "default"
+    NY = "ny"
+    SLEEP = "sleep"
+    WALK = "walk"

@@ -20,7 +20,7 @@ connected_clients = set()
 ALLOWED_IPS = IP_WHITELIST
 
 async def notify_clients(data):
-    logger.debug("Notifying WS clients about update")
+    #logger.debug("Notifying WS clients about update")
     global connected_clients
     alive = set()
     for ws in connected_clients:
@@ -35,14 +35,15 @@ class SensorsModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
         @router.post("/sensors")
         async def update_sensors(request: Request):
-            logger.debug("POST on /sensors")
             client_ip = get_real_ip(request)
+            #logger.debug(f"POST on /sensors from {client_ip}")
             if client_ip not in ALLOWED_IPS:
                 logger.warning(f"POST on /sensors from non-whitelisted IP: {client_ip}")
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 
             global latest_sensor_data
             incoming = await request.json()
+            #logger.debug(f"Data in POST sensors: {incoming}")
 
             updated = False
             for key in latest_sensor_data:

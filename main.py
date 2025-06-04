@@ -5,12 +5,9 @@ from fastapi import FastAPI, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-
 from api.base import APIModule
 from core.config import HOSTNAME
 from core.telegram import TelegramAPI
-
-
 
 def load_modules() -> list[APIModule]:
     modules = []
@@ -100,7 +97,7 @@ import asyncio
 import os
 
 async def silksong_trigger():
-    await TelegramAPI.send_message(-1001172125765, "Silksong tomorrow!!")
+    await TelegramAPI.send_message(1172125765, "Silksong tomorrow!!")
     #await TelegramAPI.send_message(459839159, "Silksong tomorrow!!")
 
 async def silksong_loop():

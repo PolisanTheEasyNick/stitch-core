@@ -54,7 +54,6 @@ class GameEditPayload(BaseModel):
 
 
 def validate(request):
-    logger.debug(f"Validating {request}")
     client_ip = get_real_ip(request)
     if client_ip not in IP_WHITELIST:
         raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")

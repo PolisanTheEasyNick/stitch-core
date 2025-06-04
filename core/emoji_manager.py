@@ -1,15 +1,9 @@
 import json
 import random
-from enum import Enum
 from pathlib import Path
 
 from .config import TG_DEFAULT_EMOJI
-
-class EmojiKind(Enum):
-    DEFAULT = "default"
-    NY = "ny"
-    SLEEP = "sleep"
-    WALK = "walk"
+from .enums import EmojiKind
 
 EMOJI_FILES = {
     EmojiKind.DEFAULT: Path("/data/default_emojis.json"),

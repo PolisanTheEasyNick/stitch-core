@@ -1,12 +1,14 @@
 from typing import Optional
 import asyncio
+import httpx
 
 from .config import TG_IS_PREMIUM, PILED_DEFAULT_COLOR, HOSTNAME, TG_DEFAULT_EMOJI, TG_CYCLING_EMOJI, TG_LOWBATTERY_EMOJI
 from .telegram import TelegramAPI
 from .piled import send_color_request, set_default_color
 from .game_manager import find_game_by_query
 from .logger import get_logger
-from .enums import ActivityType
+from .enums import EmojiKind
+from .emoji_manager import get_random_emoji
 
 logger = get_logger("MainProcessor")
 
@@ -19,18 +21,9 @@ class MainProcessor:
         self.bio_limit = 140 if TG_IS_PREMIUM else 70
         self.wearos_activity = None
         self.phone_activity = None
-
-    async def get_emoji_id_by_activity(activity: ActivityType) -> Optional[str]:
-        if activity == ActivityType.CYCLING:
-            return 5316848390628187649
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"https://{HOSTNAME}/emoji?type={activity.value}")
-                if response.status_code == 200:
-                    return response.json().get("emoji")
-        except Exception as e:
-            logger.warning(f"Failed to get emoji for {activity.value}: {e}")
-        return TG_DEFAULT_EMOJI
+        self.phone_low = False
+        self.pc_on = False
+        self.game_color = None
 
     async def set_default_status(self):
         #from any game state to default
@@ -48,27 +41,55 @@ class MainProcessor:
             return
 
         #checking whether battery low
+        if self.phone_low:
+            logger.debug(f"Phone battery low, setting low battery emoji")
+            await TelegramAPI.set_status_emoji(TG_LOWBATTERY_EMOJI)
+            return
 
-        if self.wearos_activity == "WALKING":
-            emoji_id = await get_emoji_id_by_activity(ActivityType.WALKING)
-        elif self.wearos_activity == "SLEEPING":
-            emoji_id = await get_emoji_id_by_activity(ActivityType.SLEEPING)
-        elif self.wearos_activity == "CYCLING":
-            emoji_id = TG_CYCLING_EMOJI
-        elif self.phone_activity == "WALKING":
-            emoji_id = await get_emoji_id_by_activity(ActivityType.WALKING)
-        elif self.phone_activity == "SLEEPING":
-            emoji_id = await get_emoji_id_by_activity(ActivityType.SLEEPING)
-        elif self.phone_activity == "CYCLING":
-            emoji_id = TG_CYCLING_EMOJI
-        else:
-            emoji_id = None
+        #checking activity
+        emoji_id = None
+
+        for activity in (self.wearos_activity, self.phone_activity):
+            if activity == "WALKING":
+                emoji_id = get_random_emoji(EmojiKind.WALK)
+                break
+            elif activity == "SLEEPING":
+                emoji_id = get_random_emoji(EmojiKind.SLEEP)
+                break
+            elif activity == "CYCLING":
+                emoji_id = TG_CYCLING_EMOJI
+                break
 
         if emoji_id:
             logger.debug(f"Activity-based emoji selected: {emoji_id}")
             await TelegramAPI.set_status_emoji(emoji_id)
         else:
             await TelegramAPI.set_default_emoji()
+
+    async def set_current_color(self):
+        if self.is_playing_game or self.is_playing_osu:
+            if self.game_color.startswith("#"):
+                self.game_color = self.game_color[1:]
+
+            r = int(self.game_color[0:2], 16)
+            g = int(self.game_color[2:4], 16)
+            b = int(self.game_color[4:6], 16)
+            if not self.pc_on:
+                r = int(r * 0.1)
+                g = int(g * 0.1)
+                b = int(b * 0.1)
+            send_color_request(r, g, b)
+            return
+
+        if not self.pc_on:
+            send_color_request(0, 0, 0)
+            return
+
+        #TODO: spotify song color
+        if self.current_spotify_song:
+            return
+
+        set_default_color()
 
     async def handle_spotify_update(self, song: str, artist: str, is_playing: bool, is_local: bool, is_stopped: bool = False):
         """Called by the Spotify API module on new song/event."""
@@ -121,15 +142,11 @@ class MainProcessor:
             emoji_id = game["emoji_id"] if game else find_game_by_query("default game icon")["emoji_id"]
             logger.debug(f"Emoji_id: {emoji_id}")
             await TelegramAPI.set_status_emoji(emoji_id)
-            color = game["color"]
-            if color.startswith("#"):
-                color = color[1:]
-            logger.debug(f"Game: {game}, emoji: {emoji_id}, color: {color}")
-            r = int(color[0:2], 16)
-            g = int(color[2:4], 16)
-            b = int(color[4:6], 16)
-            send_color_request(r, g, b)
+            self.game_color = game["color"]
+            logger.debug(f"Game: {game}, emoji: {emoji_id}, color: {self.game_color}")
+            await self.set_current_color()
         else:
+            self.game_color = None
             await self.set_default_status()
             await self.set_current_emoji()
             set_default_color()
@@ -149,6 +166,7 @@ class MainProcessor:
             gameBio = f"🎮osu!: Chilling in multiplayer lobby"
         elif STATUS == 3 or STATUS == -1:
             self.is_playing_osu = False
+            self.game_color = None
             await self.set_default_status()
             await self.set_current_emoji()
             set_default_color()
@@ -161,22 +179,17 @@ class MainProcessor:
             game = find_game_by_query("osu")
             emoji_id = game["emoji_id"] if game else find_game_by_query("default game icon")["emoji_id"]
             await TelegramAPI.set_status_emoji(emoji_id)
-            color = game["color"]
-            if color.startswith("#"):
-                color = color[1:]
-            r = int(color[0:2], 16)
-            g = int(color[2:4], 16)
-            b = int(color[4:6], 16)
-            send_color_request(r, g, b)
+            self.game_color = game["color"]
+            await self.set_current_color()
 
     async def handle_activity_update(self, activity_data: dict):
-        phone_battery = activity_data.get("phone_battery")
-        wearos_battery = activity_data.get("wearos_battery")
+        self.phone_low = activity_data.get("phone_battery") == "LOW"
         self.phone_activity = activity_data.get("phone_activity", "CHILL")
         self.wearos_activity = activity_data.get("wearos_activity", "CHILL")
-
+        self.pc_on = activity_data.get("pc_status", False)
         logger.debug(f"Handling activity update: {activity_data}")
-        set_current_emoji()
+        await self.set_current_emoji()
+        await self.set_current_color()
 
 
 
