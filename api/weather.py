@@ -100,8 +100,8 @@ async def weather_update():
 
         while True:
           ### Send a GET request to the API endpoint and parse the JSON response
-          response = requests.get(url)
           try:
+           response = requests.get(url)
            weather_data = json.loads(response.content)[0]
           except:
            logger.error(f"Cant get [0], response.content: {response.content}")
@@ -118,7 +118,7 @@ async def weather_update():
           real_temp = weather_data['RealFeelTemperature']['Metric']['Value']
 
           try:
-            response = requests.get(f"http://api.weatherapi.com/v1/astronomy.json?key={WEATHER_API_KEY}7&q={WEATHER_COORDS}")
+            response = requests.get(f"http://api.weatherapi.com/v1/astronomy.json?key={WEATHER_API_KEY}&q={WEATHER_COORDS}")
             sunrise_data = json.loads(response.content)
             sunrise = sunrise_data['astronomy']['astro']['sunrise']
             sunset = sunrise_data['astronomy']['astro']['sunset']
