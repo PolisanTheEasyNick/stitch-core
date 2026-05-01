@@ -1,6 +1,7 @@
 import json
 import random
 from pathlib import Path
+from datetime import date
 
 from .config import TG_DEFAULT_EMOJI
 from .enums import EmojiKind
@@ -12,7 +13,17 @@ EMOJI_FILES = {
     EmojiKind.WALK: Path("/data/walking_emojis.json"),
 }
 
+def is_winter(today: date | None = None) -> bool:
+    today = today or date.today()
+    return today.month in (12, 1, 2)
+
+def normalize_emoji_kind(kind: EmojiKind) -> EmojiKind:
+    if kind == EmojiKind.DEFAULT and is_winter():
+        return EmojiKind.NY
+    return kind
+
 def get_emoji_file_path(kind: EmojiKind) -> Path:
+    kind = normalize_emoji_kind(kind)
     return EMOJI_FILES.get(kind, EMOJI_FILES[EmojiKind.DEFAULT])
 
 def load_emojis(kind: EmojiKind = EmojiKind.DEFAULT):

@@ -2,7 +2,7 @@ from typing import Optional
 import asyncio
 import httpx
 
-from .config import TG_IS_PREMIUM, PILED_DEFAULT_COLOR, HOSTNAME, TG_DEFAULT_EMOJI, TG_CYCLING_EMOJI, TG_LOWBATTERY_EMOJI
+from .config import TG_IS_PREMIUM, HOSTNAME, TG_DEFAULT_EMOJI, TG_CYCLING_EMOJI, TG_LOWBATTERY_EMOJI
 from .telegram import TelegramAPI
 from .piled import send_color_request, set_default_color
 from .game_manager import find_game_by_query
@@ -24,6 +24,8 @@ class MainProcessor:
         self.phone_low = False
         self.pc_on = False
         self.game_color = None
+        self.is_someone_at_room = False
+
 
     async def set_default_status(self):
         #from any game state to default
@@ -51,12 +53,15 @@ class MainProcessor:
 
         for activity in (self.wearos_activity, self.phone_activity):
             if activity == "WALKING":
+                logger.debug("Activity is WALKING")
                 emoji_id = get_random_emoji(EmojiKind.WALK)
                 break
             elif activity == "SLEEPING":
+                logger.debug("Activity is SLEEPING")
                 emoji_id = get_random_emoji(EmojiKind.SLEEP)
                 break
             elif activity == "CYCLING":
+                logger.debug("Activity is CYCLING")
                 emoji_id = TG_CYCLING_EMOJI
                 break
 
@@ -67,6 +72,16 @@ class MainProcessor:
             await TelegramAPI.set_default_emoji()
 
     async def set_current_color(self):
+        if not self.is_someone_at_room:
+             logger.debug("No one at room, turning off lights")
+             send_color_request(0, 0, 0)
+             return
+
+        if self.wearos_activity == "SLEEPING" or self.phone_activity == "SLEEPING":
+            logger.debug("User is sleeping, turning off lights")
+            send_color_request(0, 0, 0)
+            return
+
         if self.is_playing_game or self.is_playing_osu:
             if self.game_color.startswith("#"):
                 self.game_color = self.game_color[1:]
@@ -149,7 +164,7 @@ class MainProcessor:
             self.game_color = None
             await self.set_default_status()
             await self.set_current_emoji()
-            set_default_color()
+            await self.set_current_color()
 
     async def handle_osu_update(self, osu_data: str):
         artist = osu_data["artist"]
@@ -158,13 +173,17 @@ class MainProcessor:
         SR = osu_data["SR"]
         STATUS = osu_data["status"]
         logger.debug(f"Received osu update: {artist} - {title}, BPM: {BPM}, SR: {SR}, Status: {STATUS}")
+        if STATUS == 0:
+            logged.debug(f"osu!status = 0, ignoring.")
+            return
+
         if STATUS == 2:
             gameBio = f"🎮osu!: {artist} - {title} | 🥁: {BPM} | {SR}*"
         elif STATUS == 11:
             gameBio = f"🎮osu!: Searching for multiplayer lobby"
         elif STATUS == 12:
             gameBio = f"🎮osu!: Chilling in multiplayer lobby"
-        elif STATUS == 3 or STATUS == -1:
+        elif STATUS == 3 or STATUS == -1 or STATUS == "offline":
             self.is_playing_osu = False
             self.game_color = None
             await self.set_default_status()
@@ -187,11 +206,11 @@ class MainProcessor:
         self.phone_activity = activity_data.get("phone_activity", "CHILL")
         self.wearos_activity = activity_data.get("wearos_activity", "CHILL")
         self.pc_on = activity_data.get("pc_status", False)
+        self.is_someone_at_room = activity_data.get("is_someone_at_room", False)
+
         logger.debug(f"Handling activity update: {activity_data}")
         await self.set_current_emoji()
         await self.set_current_color()
-
-
 
 
 main_processor = MainProcessor()

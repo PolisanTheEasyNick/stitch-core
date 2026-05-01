@@ -8,6 +8,8 @@ services:
       - 4308:4308
     volumes:
       - stitchcore_cache:/data
+      - /tmp:/tmp
+    user: "1001:1001"
 
 volumes:
   stitchcore_cache:

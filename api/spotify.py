@@ -37,6 +37,7 @@ async def spotify_update():
     old_song = None
 
     try:
+        no_data_logged = False
         while spotify_task_running:
             try:
                 data = get_info()
@@ -52,24 +53,27 @@ async def spotify_update():
                 continue
 
             if not data or not data.get("item"):
-                last_spotify = {
-                    "artist": None,
-                    "song": None,
-                    "state": "stopped",
-                }
-                logger.debug(f"No data")
-                await main_processor.handle_spotify_update("", "", False, False, True)
-                await broadcast_update()
+                logger.debug("Not playing any song")
+                if not no_data_logged and last_spotify != {"artist": None, "song": None, "state": "stopped"}:
+                    last_spotify = {
+                        "artist": None,
+                        "song": None,
+                        "state": "stopped",
+                    }
+                    logger.debug("Updating about no data")
+                    await main_processor.handle_spotify_update("", "", False, False, True)
+                    await broadcast_update()
+                    no_data_logged = True
                 await asyncio.sleep(10)
                 continue
 
+            no_data_logged = False
             is_playing = data.get("is_playing", False)
             song = data["item"]["name"]
             is_local = data['item']['is_local']
             artist = ", ".join(a["name"] for a in data["item"]["artists"])
 
             if song != old_song or artist != old_artist or last_spotify.get("state") != ("playing" if is_playing else "paused"):
-
                 last_spotify = {
                     "artist": artist,
                     "song": song,

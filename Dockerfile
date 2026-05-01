@@ -13,6 +13,12 @@ ENV PYTHONUNBUFFERED=1
 COPY requirements.txt .
 RUN python -m pip install -r requirements.txt
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        tesseract-ocr libgl1 \
+        tesseract-ocr-ukr \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY . /app
 

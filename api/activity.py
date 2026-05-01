@@ -10,6 +10,8 @@ from core.logger import get_logger
 from core.main_processor import main_processor
 from .configurator import validate
 
+
+KEEP_ALIVE = 30
 PC_TIMEOUT_SECONDS = 20
 pc_last_seen = 0
 pc_was_online = False
@@ -19,7 +21,8 @@ activity_data = {
     "wearos_battery": "OK",
     "phone_activity": "CHILL",
     "wearos_activity": "CHILL",
-    "pc_status": pc_was_online
+    "pc_status": pc_was_online,
+    "is_someone_at_room": False
 }
 
 connected_clients = set()
@@ -28,7 +31,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 logger = get_logger("Activity")
 
 async def notify_clients(data):
-    logger.debug("Notifying WS clients")
+    #logger.debug("Notifying WS clients")
     global connected_clients
     alive = set()
     for ws in connected_clients:
@@ -40,7 +43,7 @@ async def notify_clients(data):
     connected_clients = alive
 
 async def verify_token(token: Annotated[str, Depends(oauth2_scheme)]):
-    logger.debug("Veryfing OAuth2 Token")
+   # logger.debug("Veryfing OAuth2 Token")
     if token != DIGEST_BEARER:
         raise HTTPException(status_code=401, detail="Invalid or missing token")
     return token
@@ -52,6 +55,7 @@ class ActivityModule(APIModule):
             incoming = await request.json()
             logger.debug(f"POST request with {incoming}")
             updated = False
+
             for key in activity_data:
                 if key in incoming:
                     activity_data[key] = incoming[key]

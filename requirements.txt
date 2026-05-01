@@ -11,3 +11,6 @@ spotipy==2.25.1
 telethon==1.40.0
 httpx==0.28.1
 yt-finder==1.1.0
+numpy==2.2.6
+pytesseract==0.3.13
+opencv-python==4.13.0.92

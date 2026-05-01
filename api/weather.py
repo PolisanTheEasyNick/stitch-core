@@ -20,8 +20,51 @@ connected_clients = set()
 last_weather = {}
 
 LAST_WEATHER_FILE = '/data/last_weather_fetch.txt'
-FETCH_INTERVAL_SECONDS = 1800  #update once per 30 minutes
+#FETCH_INTERVAL_SECONDS = 1800  #update once per 30 minutes
+FETCH_INTERVAL_SECONDS = 300 #update once per 5 minutes
 
+weather_colors = {
+    1:  "#FFD700",  # Sunny - golden yellow
+    2:  "#FFE066",  # Mostly sunny - soft yellow
+    3:  "#F0E68C",  # Partly sunny - khaki yellow
+    4:  "#D3D3D3",  # Intermittent clouds - light gray
+    5:  "#E0C080",  # Hazy sunshine - warm beige
+    6:  "#A9A9A9",  # Mostly cloudy - dark gray
+    7:  "#808080",  # Cloudy - medium gray
+    8:  "#696969",  # Dreary (overcast) - dim gray
+    11: "#C0C0C0",  # Fog - silvery gray
+    12: "#4682B4",  # Showers - steel blue
+    13: "#708090",  # Mostly cloudy w/ showers - slate gray
+    14: "#87CEEB",  # Partly sunny w/ showers - sky blue
+    15: "#483D8B",  # T-storms - dark slate blue
+    16: "#4B0082",  # Mostly cloudy w/ T-storms - indigo
+    17: "#6A5ACD",  # Partly sunny w/ T-storms - slate blue
+    18: "#4169E1",  # Rain - royal blue
+    19: "#B0E0E6",  # Flurries - powder blue
+    20: "#ADD8E6",  # Mostly cloudy w/ flurries - light blue
+    21: "#E6F0FA",  # Partly sunny w/ flurries - pale icy blue
+    22: "#FFFFFF",  # Snow - pure white
+    23: "#DDEEFF",  # Mostly cloudy w/ snow - cloudy white-blue
+    24: "#00CED1",  # Ice - dark turquoise
+    25: "#AFEEEE",  # Sleet - pale turquoise
+    26: "#40E0D0",  # Freezing rain - turquoise
+    29: "#87CEFA",  # Rain and snow - light sky blue
+    30: "#FF4500",  # Hot - orange red
+    31: "#1E90FF",  # Cold - dodger blue
+    32: "#20B2AA",  # Windy - light sea green
+    33: "#191970",  # Clear night - midnight blue
+    34: "#2F4F4F",  # Mostly clear night - dark slate gray
+    35: "#708090",  # Partly cloudy night - slate gray
+    36: "#A9A9A9",  # Intermittent clouds night - dark gray
+    37: "#B0C4DE",  # Hazy moonlight - light steel blue
+    38: "#696969",  # Mostly cloudy night - dim gray
+    39: "#4682B4",  # Partly cloudy w/ showers night - steel blue
+    40: "#5F9EA0",  # Mostly cloudy w/ showers night - cadet blue
+    41: "#483D8B",  # Partly cloudy w/ T-storms night - dark slate blue
+    42: "#4B0082",  # Mostly cloudy w/ T-storms night - indigo
+    43: "#B0E0E6",  # Mostly cloudy w/ flurries night - powder blue
+    44: "#DDEEFF",  # Mostly cloudy w/ snow night - cloudy white-blue
+}
 
 async def send_update(data):
     logger.debug("Sending update to WS subscribers")
@@ -74,13 +117,16 @@ async def weather_update():
           uv_index = weather_data['UVIndex']
           real_temp = weather_data['RealFeelTemperature']['Metric']['Value']
 
-          response = requests.get(f"http://api.weatherapi.com/v1/astronomy.json?key={WEATHER_API_KEY}7&q={WEATHER_COORDS}")
-          sunrise_data = json.loads(response.content)
-          sunrise = sunrise_data['astronomy']['astro']['sunrise']
-          sunset = sunrise_data['astronomy']['astro']['sunset']
-          # Parse the target time string into a datetime.time object
-          sunrise_time = datetime.datetime.strptime(sunrise, '%I:%M %p').time()
-          sunset_time = datetime.datetime.strptime(sunset, '%I:%M %p').time()
+          try:
+            response = requests.get(f"http://api.weatherapi.com/v1/astronomy.json?key={WEATHER_API_KEY}7&q={WEATHER_COORDS}")
+            sunrise_data = json.loads(response.content)
+            sunrise = sunrise_data['astronomy']['astro']['sunrise']
+            sunset = sunrise_data['astronomy']['astro']['sunset']
+            # Parse the target time string into a datetime.time object
+            sunrise_time = datetime.datetime.strptime(sunrise, '%I:%M %p').time()
+            sunset_time = datetime.datetime.strptime(sunset, '%I:%M %p').time()
+          except:
+            logger.error(f"Cant get sunrise data, response.content: {response.content}")
 
           kiev_tz = pytz.timezone('Europe/Kiev')
           current_time = datetime.datetime.now(kiev_tz).time()
@@ -99,6 +145,7 @@ async def weather_update():
           UV Index: {uv_index}
           Is day in Ukraine: {isDay}
           Update time: {datetime.datetime.now(kiev_tz).strftime('%Y-%m-%d %H:%M:%S')}
+          Weather color: {weather_colors[weather_icon]}
           """)
 
           weather_dict = {
@@ -109,6 +156,7 @@ async def weather_update():
             'weather_text': weather_text,
             'uv_index': uv_index,
             'last_update_time': datetime.datetime.now(kiev_tz).strftime('%Y-%m-%d %H:%M:%S'),
+            'color': weather_colors[weather_icon]
           }
 
           await send_update(weather_dict)

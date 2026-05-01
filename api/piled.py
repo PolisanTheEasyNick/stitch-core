@@ -1,49 +1,58 @@
 from typing import Optional
 
 from fastapi import APIRouter, Query, Request, HTTPException
+from pydantic import BaseModel, Field, conint
 
 from .base import APIModule, get_real_ip
-from core.piled import get_current_color, send_color_request
+from core.piled import get_current_color, send_color_request, update_default_color, get_default_color
 from core.config import IP_WHITELIST
 from core.logger import get_logger
 
 logger = get_logger("PiLED")
 
+class ColorRequest(BaseModel):
+    hex: Optional[str] = Field(None, description="Hex color string like #ff00aa or ff00aa")
+    red: Optional[conint(ge=0, le=255)] = None
+    green: Optional[conint(ge=0, le=255)] = None
+    blue: Optional[conint(ge=0, le=255)] = None
+
+class DefaultColorRequest(BaseModel):
+    color: str
+
 class PiLEDModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
+
         @router.get("/piled")
         async def get_color():
             logger.debug("GET on /piled")
             return get_current_color()
 
         @router.post("/piled")
-        async def set_color(
-            request: Request,
-            hex: Optional[str] = Query(None, description="Hex color string like #ff00aa or ff00aa"),
-            red: Optional[int] = Query(None, ge=0, le=255),
-            green: Optional[int] = Query(None, ge=0, le=255),
-            blue: Optional[int] = Query(None, ge=0, le=255)
-        ):
-            logger.debug("POST on /piled")
+        async def set_color(request: Request, body: ColorRequest):
+            logger.debug(f"POST on /piled, body: {body.dict()}")
             client_ip = get_real_ip(request)
             if client_ip not in IP_WHITELIST:
                 logger.warning(f"POST on /piled from non-whitelisted IP: {client_ip}")
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 
             try:
-                if hex:
-                    hex_clean = hex.lstrip("#")
+                if body.hex:
+                    logger.debug("hex detected")
+                    hex_clean = body.hex.lstrip("#")
                     if len(hex_clean) != 6:
-                        return {"status": "error", "reason": "Invalid hex color length"}
+                        raise HTTPException(status_code=400, detail="Invalid hex color length")
                     r = int(hex_clean[0:2], 16)
                     g = int(hex_clean[2:4], 16)
                     b = int(hex_clean[4:6], 16)
-                elif red is not None and green is not None and blue is not None:
-                    r, g, b = red, green, blue
+                elif body.red is not None and body.green is not None and body.blue is not None:
+                    logger.debug("rgb detected")
+                    r, g, b = body.red, body.green, body.blue
                 else:
-                    return {"status": "error", "reason": "Missing color parameters"}
+                    logger.debug(f"nothing detected. body: {body.dict()}")
+                    raise HTTPException(status_code=400, detail="Missing color parameters")
 
                 send_color_request(r, g, b, 3, 50)
+                logger.debug(f"Set color r: {r}, g: {g}, b: {b}")
                 return {
                     "status": "ok",
                     "color": f"{r:02x}{g:02x}{b:02x}",
@@ -53,4 +62,18 @@ class PiLEDModule(APIModule):
                 }
 
             except Exception as e:
-                return {"status": "error", "reason": str(e)}
+                raise HTTPException(status_code=500, detail=str(e))
+
+        @router.get("/piled/default")
+        async def get_def_color():
+            return {"color": get_default_color()}
+
+        @router.post("/piled/default")
+        async def set_def_color(request: Request, body: DefaultColorRequest):
+            client_ip = get_real_ip(request)
+            if client_ip not in IP_WHITELIST:
+                logger.warning(f"POST on /piled/default from non-whitelisted IP: {client_ip}")
+                raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
+            
+            update_default_color(body.color)
+            return {"status": "ok", "new_default": body.color}

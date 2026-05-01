@@ -4,6 +4,7 @@ import random
 import socket
 from time import time
 import struct
+import threading
 
 from core.config import PILED_SHARED_SECRET, PILED_ADDRESS, PILED_DEFAULT_COLOR
 from .logger import get_logger
@@ -39,7 +40,8 @@ def send_color_request(red, green, blue, duration = 3, steps = 150):
     hmac_result = hmac_sha256(PILED_SHARED_SECRET, header_with_payload)
     hex_string = "".join(f"{b:02X}" for b in hmac_result)
     tcp_package = HEADER + hmac_result + PAYLOAD
-    send_tcp_packet(PILED_ADDRESS, 3384, tcp_package)
+    thread = threading.Thread(target=send_tcp_packet, args=(PILED_ADDRESS, 3384, tcp_package), daemon=True)
+    thread.start()
 
 def get_current_color():
     logger.debug("Get current color called")
@@ -80,9 +82,11 @@ def get_current_color():
         logger.error(f"An error occurred: {e}")
         return {"status": "error", "reason": str(e)}
 
+CURRENT_DEFAULT_COLOR = PILED_DEFAULT_COLOR
+
 def set_default_color():
-    logger.debug("Set default color called")
-    color = PILED_DEFAULT_COLOR
+    logger.debug(f"Set default color called. Current default: {CURRENT_DEFAULT_COLOR}")
+    color = CURRENT_DEFAULT_COLOR
     if color.startswith("#"):
         color = color[1:]
 
@@ -90,3 +94,12 @@ def set_default_color():
     g = int(color[2:4], 16)
     b = int(color[4:6], 16)
     send_color_request(r, g, b, 3, 50)
+
+def update_default_color(new_color: str):
+    global CURRENT_DEFAULT_COLOR
+    logger.debug(f"Updating default color to: {new_color}")
+    CURRENT_DEFAULT_COLOR = new_color
+    set_default_color()
+
+def get_default_color():
+    return CURRENT_DEFAULT_COLOR
