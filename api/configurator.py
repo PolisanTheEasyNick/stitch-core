@@ -1,43 +1,71 @@
-from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
+import json
+from pathlib import Path
 from typing import List, Optional
 
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from pydantic import BaseModel
 
 from core.quote_manager import (
-    load_quotes, save_quotes,
-    append_quote, update_quote, remove_quote
+    load_quotes,
+    save_quotes,
+    append_quote,
+    update_quote,
+    remove_quote,
 )
 from core.emoji_manager import (
-    load_emojis, save_emojis,
-    append_emoji, update_emoji, remove_emoji,
-    parse_emoji_kind
+    load_emojis,
+    save_emojis,
+    append_emoji,
+    update_emoji,
+    remove_emoji,
+    parse_emoji_kind,
 )
 from core.game_manager import (
-    load_games, save_games,
-    append_game, update_game, remove_game
+    load_games,
+    save_games,
+    append_game,
+    update_game,
+    remove_game,
 )
 from core.config import IP_WHITELIST
+from core.data_paths import (
+    DATA_DIR,
+    EMOJI_FILES,
+    GAMES_FILE,
+    QUOTES_FILE,
+    SPOTIFY_TOKEN_FILE,
+    TELEGRAM_SESSION_FILE,
+    USERBOT_SESSION_FILE,
+    ensure_data_dir,
+)
+from core.telegram import TelegramAPI
 from .base import APIModule, get_real_ip
 from core.logger import get_logger
 
 logger = get_logger("Configurator")
 
+
 class QuotesPayload(BaseModel):
     quotes: List[str]
+
 
 class QuoteEditPayload(BaseModel):
     index: int
     value: str
 
+
 class EmojiEditPayload(BaseModel):
     index: int
     value: str
 
+
 class EmojisPayload(BaseModel):
     emojis: List[str]
 
+
 class EmojiAddPayload(BaseModel):
     value: str
+
 
 class GameItem(BaseModel):
     steam_id: str
@@ -45,8 +73,10 @@ class GameItem(BaseModel):
     emoji_id: str
     color: str
 
+
 class GamesPayload(BaseModel):
     games: List[GameItem]
+
 
 class GameEditPayload(BaseModel):
     index: int
@@ -58,10 +88,136 @@ def validate(request):
     if client_ip not in IP_WHITELIST:
         raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
 
+
+def _normalize_text_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _load_json_or_text_list(raw: bytes) -> list[str]:
+    text = raw.decode("utf-8")
+    stripped = text.strip()
+    if stripped.startswith("[") or stripped.startswith("{"):
+        payload = json.loads(stripped)
+        if isinstance(payload, dict):
+            payload = payload.get("quotes") or payload.get("emojis") or payload.get("items")
+        if not isinstance(payload, list):
+            raise HTTPException(status_code=400, detail="Expected a JSON array or a supported object wrapper.")
+        values = [str(item).strip() for item in payload if str(item).strip()]
+    else:
+        values = _normalize_text_lines(text)
+
+    if not values:
+        raise HTTPException(status_code=400, detail="No usable entries found in uploaded file.")
+    return values
+
+
+def _load_games_payload(raw: bytes) -> list[dict]:
+    payload = json.loads(raw.decode("utf-8"))
+    if isinstance(payload, dict):
+        payload = payload.get("games")
+    if not isinstance(payload, list):
+        raise HTTPException(status_code=400, detail="Games import expects a JSON array.")
+
+    normalized = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="Each game entry must be a JSON object.")
+        normalized.append(
+            {
+                "steam_id": str(item.get("steam_id", "")).strip(),
+                "name": str(item.get("name", "")).strip(),
+                "emoji_id": str(item.get("emoji_id", "")).strip(),
+                "color": str(item.get("color", "#ffffff")).strip() or "#ffffff",
+            }
+        )
+
+    if not normalized:
+        raise HTTPException(status_code=400, detail="No games found in uploaded file.")
+    return normalized
+
+
+def _write_binary(path: Path, raw: bytes) -> None:
+    ensure_data_dir()
+    path.write_bytes(raw)
+
+
+def _file_status(path: Path) -> dict:
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {
+        "exists": True,
+        "size": stat.st_size,
+        "modified": stat.st_mtime,
+    }
+
+
 class ConfigAPI(APIModule):
     def register_routes(self, router: APIRouter) -> None:
+        @router.get("/config/import/status")
+        async def get_import_status(request: Request):
+            logger.debug("GET on /config/import/status")
+            validate(request)
+            return {
+                "data_dir": str(DATA_DIR),
+                "files": {
+                    "quotes": _file_status(QUOTES_FILE),
+                    "games": _file_status(GAMES_FILE),
+                    "default_emojis": _file_status(EMOJI_FILES["default"]),
+                    "ny_emojis": _file_status(EMOJI_FILES["ny"]),
+                    "sleep_emojis": _file_status(EMOJI_FILES["sleep"]),
+                    "walk_emojis": _file_status(EMOJI_FILES["walk"]),
+                    "telegram_session": _file_status(TELEGRAM_SESSION_FILE),
+                    "userbot_session": _file_status(USERBOT_SESSION_FILE),
+                    "spotify_token": _file_status(SPOTIFY_TOKEN_FILE),
+                },
+            }
 
-        # QUOTES
+        @router.post("/config/import/quotes")
+        async def import_quotes(request: Request, file: UploadFile = File(...)):
+            logger.debug("POST on /config/import/quotes")
+            validate(request)
+            quotes = _load_json_or_text_list(await file.read())
+            save_quotes(quotes)
+            return {"success": True, "count": len(quotes)}
+
+        @router.post("/config/import/emoji")
+        async def import_emojis(request: Request, file: UploadFile = File(...), type: Optional[str] = Query("default")):
+            logger.debug("POST on /config/import/emoji")
+            validate(request)
+            kind = parse_emoji_kind(type)
+            emojis = _load_json_or_text_list(await file.read())
+            save_emojis(emojis, kind)
+            return {"success": True, "count": len(emojis), "type": kind.value}
+
+        @router.post("/config/import/games")
+        async def import_games(request: Request, file: UploadFile = File(...)):
+            logger.debug("POST on /config/import/games")
+            validate(request)
+            games = _load_games_payload(await file.read())
+            save_games(games)
+            return {"success": True, "count": len(games)}
+
+        @router.post("/config/import/telegram-session")
+        async def import_telegram_session(request: Request, file: UploadFile = File(...)):
+            logger.debug("POST on /config/import/telegram-session")
+            validate(request)
+            raw = await file.read()
+            if not raw:
+                raise HTTPException(status_code=400, detail="Uploaded session file is empty.")
+            _write_binary(TELEGRAM_SESSION_FILE, raw)
+            await TelegramAPI.reload_session()
+            return {"success": True, "path": str(TELEGRAM_SESSION_FILE)}
+
+        @router.post("/config/import/spotify-token")
+        async def import_spotify_token(request: Request, file: UploadFile = File(...)):
+            logger.debug("POST on /config/import/spotify-token")
+            validate(request)
+            raw = await file.read()
+            if not raw:
+                raise HTTPException(status_code=400, detail="Uploaded Spotify token file is empty.")
+            _write_binary(SPOTIFY_TOKEN_FILE, raw)
+            return {"success": True, "path": str(SPOTIFY_TOKEN_FILE)}
 
         @router.get("/config/quotes", response_model=List[str])
         async def get_quotes(request: Request):
@@ -98,8 +254,6 @@ class ConfigAPI(APIModule):
             validate(request)
             remove_quote(index)
             return {"success": True}
-
-        # EMOJIS
 
         @router.get("/config/emoji", response_model=List[str])
         async def get_emojis(request: Request, type: Optional[str] = Query("default")):
@@ -142,8 +296,6 @@ class ConfigAPI(APIModule):
             remove_emoji(index, kind)
             return {"success": True}
 
-
-        # GAMES
         @router.get("/config/games", response_model=List[GameItem])
         async def get_games(request: Request):
             logger.debug("GET on /config/games")
@@ -177,7 +329,6 @@ class ConfigAPI(APIModule):
             validate(request)
             remove_game(index)
             return {"success": True}
-
 
     def register_websockets(self, router: APIRouter) -> None:
         pass

@@ -4,12 +4,12 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
+    user: "0:0"
     ports:
       - 4308:4308
     volumes:
       - stitchcore_cache:/data
-      - /tmp:/tmp
-    user: "1001:1001"
+    restart: unless-stopped
 
 volumes:
   stitchcore_cache:

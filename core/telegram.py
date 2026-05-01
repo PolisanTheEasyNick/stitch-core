@@ -17,24 +17,24 @@ import numpy as np
 from .config import TG_API_KEY, TG_API_HASH
 from .quote_manager import get_random_quote
 from .emoji_manager import get_random_emoji
+from .data_paths import TELEGRAM_SESSION_FILE
 from .logger import get_logger
 
 logger = get_logger("Telegram")
 
-SESSION_PATH = "/data/Stitch.session"
 
 class TelegramAPI:
     _client = None
     _telegram_lock = asyncio.Lock()
-    _enabled = True  # New flag
+    _enabled = True
 
     current_status = None
     current_emoji_status = None
 
     @classmethod
     async def connect(cls):
-        if not os.path.exists(SESSION_PATH):
-            logger.error(f"Telegram session file not found: {SESSION_PATH}")
+        if not TELEGRAM_SESSION_FILE.exists():
+            logger.error(f"Telegram session file not found: {TELEGRAM_SESSION_FILE}")
             cls._enabled = False
             return
 
@@ -42,20 +42,32 @@ class TelegramAPI:
             if cls._client is not None and cls._client.is_connected():
                 return
 
-            client = TelegramClient(SESSION_PATH, TG_API_KEY, TG_API_HASH)
+            client = TelegramClient(str(TELEGRAM_SESSION_FILE), TG_API_KEY, TG_API_HASH)
             await client.connect()
 
-            # Wait for auth if needed
             if not await client.is_user_authorized():
                 await client.start()
 
-            cls._client = client  # ✅ assign before anything else
+            cls._client = client
+            cls._enabled = True
             logger.info("Connected to Telegram")
 
-            # Now register listeners safely
             await register_outage_listener(cls._client)
 
+    @classmethod
+    async def reload_session(cls):
+        async with cls._telegram_lock:
+            if cls._client is not None:
+                try:
+                    await cls._client.disconnect()
+                except Exception as e:
+                    logger.warning(f"Failed to disconnect old Telegram client cleanly: {e}")
+            cls._client = None
+            cls._enabled = True
+            cls.current_status = None
+            cls.current_emoji_status = None
 
+        await cls.connect()
 
     @classmethod
     async def set_status_text(cls, status: str):
@@ -153,7 +165,6 @@ async def register_outage_listener(client):
     DATE_REGEX = r"\b\d{2}\.\d{2}\.\d{4}\b"
     CHANNEL_ID = 1266403816
 
-    # Stores messages by grouped_id or message_id for combining text and photos
     album_buffer = {}
 
     def extract_date(text: str):
@@ -168,10 +179,9 @@ async def register_outage_listener(client):
         return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
     async def process_media_group(group_id):
-        """Wait up to 20 seconds for the channel owner to add text to the album via edit."""
         for _ in range(20):
             await asyncio.sleep(1.0)
-            
+
             msgs = album_buffer.get(group_id, [])
             if not msgs:
                 continue
@@ -184,22 +194,19 @@ async def register_outage_listener(client):
                 if t:
                     full_text = t
                 if getattr(m, 'photo', None):
-                    # Keep them in order (assuming ascending message IDs)
                     photos.append(m)
 
             date = extract_date(full_text)
-            
+
             if date:
-                # We have the text! Let's process.
                 album_buffer.pop(group_id, None)
 
                 if "без обмежень" in full_text.lower():
                     await handle_outage_message(full_text, date)
                     return
 
-                # If there are photos, get the very first one
                 if photos:
-                    photos.sort(key=lambda x: x.id) # Ensure first photo
+                    photos.sort(key=lambda x: x.id)
                     first_photo = photos[0]
                     logger.info(f"Extracting outage schedule from FIRST photo for date {date}")
                     image = await download_to_cv2(first_photo)
@@ -209,7 +216,6 @@ async def register_outage_listener(client):
                     await handle_outage_message(full_text, date)
                 return
 
-        # Timeout reached, log it and clear
         logger.warning(f"Album/Message {group_id} timed out without finding a valid date text.")
         album_buffer.pop(group_id, None)
 
@@ -218,15 +224,12 @@ async def register_outage_listener(client):
     async def on_message_or_edit(event):
         try:
             msg = event.message
-            
-            # Use grouped_id if it's an album, otherwise use its own message id
             group_id = msg.grouped_id or msg.id
 
             if group_id not in album_buffer:
                 album_buffer[group_id] = [msg]
                 asyncio.create_task(process_media_group(group_id))
             else:
-                # Update/Replace the message if it's an edit, or append if it's a new album photo
                 existing = album_buffer[group_id]
                 replaced = False
                 for i, m in enumerate(existing):
@@ -236,6 +239,6 @@ async def register_outage_listener(client):
                         break
                 if not replaced:
                     existing.append(msg)
-                    
+
         except Exception as e:
             logger.error(f"Error buffering outage msg: {e}")

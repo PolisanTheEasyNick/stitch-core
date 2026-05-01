@@ -6,6 +6,7 @@ from datetime import datetime
 
 from .base import APIModule, get_real_ip
 from core.main_processor import main_processor
+from core.data_paths import SPOTIFY_TOKEN_FILE
 from core.logger import get_logger
 from core.config import IP_WHITELIST
 
@@ -19,14 +20,21 @@ last_spotify = {
 
 connected_clients: set[WebSocket] = set()
 
+
 def get_info():
-    cache_path = "/data/sp_token"
-    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(scope="user-read-playback-state", cache_path=cache_path))
+    sp = spotipy.Spotify(
+        auth_manager=SpotifyOAuth(
+            scope="user-read-playback-state",
+            cache_path=str(SPOTIFY_TOKEN_FILE),
+        )
+    )
     return sp.current_playback()
+
 
 spotify_task = None
 spotify_task_running = False
 last_update = None
+
 
 async def spotify_update():
     global last_spotify
@@ -98,6 +106,7 @@ async def spotify_update():
         await main_processor.handle_spotify_update("", "", False, False, True)
         await broadcast_update()
 
+
 async def broadcast_update():
     to_remove = set()
     for ws in connected_clients:
@@ -107,6 +116,7 @@ async def broadcast_update():
             to_remove.add(ws)
     for ws in to_remove:
         connected_clients.remove(ws)
+
 
 class SpotifyModule(APIModule):
     def register_routes(self, router: APIRouter) -> None:
@@ -131,21 +141,17 @@ class SpotifyModule(APIModule):
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
             global spotify_task, spotify_task_running
 
-
             if spotify_task_running:
                 logger.info("Spotify stopping per request from POST")
-                # stop the task
                 spotify_task_running = False
                 if spotify_task:
                     spotify_task.cancel()
                     spotify_task = None
                 return {"status": "stopped"}
             else:
-                # start the task
                 logger.info("Spotify starting per request from POST")
                 spotify_task = asyncio.create_task(spotify_update())
                 return {"status": "started"}
-
 
     def register_websockets(self, app: FastAPI):
         @app.websocket("/spotify")
