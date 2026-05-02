@@ -8,6 +8,8 @@ from core.piled import get_current_color, send_color_request, update_default_col
 from core.config import IP_WHITELIST
 from core.logger import get_logger
 
+from .activity import activity_data
+
 logger = get_logger("PiLED")
 
 class ColorRequest(BaseModel):
@@ -34,6 +36,13 @@ class PiLEDModule(APIModule):
             if client_ip not in IP_WHITELIST:
                 logger.warning(f"POST on /piled from non-whitelisted IP: {client_ip}")
                 raise HTTPException(status_code=403, detail=f"Forbidden: IP {client_ip} not allowed")
+
+            if activity_data["is_someone_at_room"]:
+                logger.warning("PiLED POST called, but no one in room. Ignoring request.")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Action forbidden: no one in room"
+                )
 
             try:
                 if body.hex:
