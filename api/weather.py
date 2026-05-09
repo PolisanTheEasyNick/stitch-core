@@ -74,7 +74,8 @@ async def send_update(data):
     for ws in connected_clients:
         try:
             await ws.send_text(message)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Exception while sending update to subscribers: {e}")
             disconnected.add(ws)
     connected_clients -= disconnected
 
@@ -186,10 +187,19 @@ class WeatherModule(APIModule):
             logger.debug("GET on ws /weather")
             await websocket.accept()
             connected_clients.add(websocket)
+            logger.debug(f"WS connected, connected clients now: {connected_clients}")
             try:
                 await websocket.send_json(last_weather)
+                while True:
+                    await websocket.receive_text()
             except WebSocketDisconnect:
-                connected_clients.remove(websocket)
+                logger.debug("Client disconnected gracefully")
+            except Exception as e:
+                logger.debug(f"WS connection dropped with error: {e}")
+            finally:
+                if websocket in connected_clients:
+                    connected_clients.remove(websocket)
+                logger.debug(f"WS disconnected, connected clients now: {connected_clients}")
 
     def register_events(self, app: FastAPI) -> None:
         @app.on_event("startup")
